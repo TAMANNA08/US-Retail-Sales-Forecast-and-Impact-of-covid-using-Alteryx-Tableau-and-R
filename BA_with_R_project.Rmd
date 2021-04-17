@@ -1,0 +1,404 @@
+---
+title: "Project_BA_R"
+author: "Tamanna_Kawatra"
+date: "3/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+pacman::p_load(dplyr,fpp3, GGally, gridExtra, lubridate, patchwork, purrr, ggplot2, tibble, reportr , plyr, fable)
+search()
+theme_set(theme_classic())
+options(digits = 3)
+```
+## I have taken a data set of month retail trade sales from US census bureau 
+## I will try to analyze the trend in sales over the past years and predict future demand
+
+
+```{r}
+
+df <- data.frame(read.csv("RetailDatafinal.csv"))
+colnames(df)
+names(df)[names(df) == "ï..Kind.of.business..2000."] <- "Kind.of.Business"
+colnames(df)
+df$Date = as.Date(df$Date)
+df$Sales = as.numeric(df$Sales)
+summary(df)
+```
+
+```{r}
+## Taking Total retails sales and Food services timeseries data 
+
+retail_sales_tb = df %>% subset(Kind.of.Business == "Retail and food services sales, total") %>% mutate(Year_Month = yearmonth(Date)) %>%
+  as_tsibble(index =Year_Month) 
+
+
+autoplot(retail_sales_tb, Sales)
+
+
+
+```
+## As overall we can see a downward trend in the months of March 2020 and April 2020, but to analyze further we will take 10 industries in particular and will base our futher analysis on these 10 industries only
+
+```{r}
+industry_filter = c('Motor vehicle and parts dealers' ,  
+'Automobile and other motor vehicle dealers' ,  
+'Building mat. and garden equip. and supplies dealers' ,  
+'Beer, wine and liquor stores' ,  
+'Pharmacies and drug stores' ,  
+'Gasoline stations' ,  
+'Clothing and clothing access. stores' ,  
+'Sporting goods, hobby, musical instrument, and book stores' ,  
+'Electronic shopping and mail order houses' ,  
+'Electronics and appliance stores', 
+'Grocery stores')
+
+df5 = df  %>% group_by(Kind.of.Business , month = month(Date))%>% arrange(Kind.of.Business , month = month(Date)) 
+```
+
+
+```{r}
+ df6 = ddply(df5, .(Kind.of.Business, month), mutate ,
+      yoy_growth_pct = (c(NA, diff(Sales)))/lag(Sales,1))
+
+
+ YOY_pct  = df6 %>% select(c(Date, Kind.of.Business , yoy_growth_pct)) %>% pivot_wider(names_from = Kind.of.Business , values_from = yoy_growth_pct)
+
+
+ df_yoy = subset(df6, year(Date) == 2020 & Kind.of.Business %in% industry_filter)
+ 
+ df6 %>% filter(Kind.of.Business %in% industry_filter) %>% ggplot(aes(x = Date, y = yoy_growth_pct*100 )) +
+      geom_line() +facet_wrap(vars(Kind.of.Business) , nrow = 4 , ncol = 3 , scales = "free")
+
+
+```
+
+```{r}
+## add facet grid and reduce retails
+ggplot(df_yoy, aes(x=month, y=yoy_growth_pct)) + 
+  geom_col(position="dodge") + scale_x_binned( ) +
+  scale_y_continuous()+ facet_wrap(vars(Kind.of.Business ) , nrow = 4 , ncol = 3)
+```
+
+
+
+
+
+```{r}
+## Filtering industries
+
+
+
+df_retail = subset(df, Kind.of.Business %in% industry_filter)
+
+
+```
+```{r}
+sale_tibble = df_retail %>%
+  mutate(Year_Month = yearmonth(Date)) %>%
+  as_tsibble(index =Year_Month , key = Kind.of.Business) 
+```
+
+
+```{r}
+ sale_tibble %>% ggplot(aes(x = Year_Month, y = Sales )) +
+      geom_line() +facet_wrap(vars(Kind.of.Business) , nrow = 4 , ncol = 3 , scales = "free")
+```
+# as there is clear trend in the data the series is not stationary
+
+
+```{r}
+sale_tibble %>%
+  features(Sales, unitroot_kpss)
+## number of difference required
+sale_tibble %>% features(Sales, unitroot_ndiffs)
+```
+
+# as there is clear trend in the data the series is not stationary
+```{r}
+
+```
+
+
+```{r}
+sale_tibble %>%
+  mutate(diff_value = difference(Sales)) %>%
+  features(diff_value, unitroot_kpss)
+
+
+```
+```{r}
+sale_tibble %>% features(Sales, unitroot_ndiffs)
+```
+```{r}
+
+```
+
+```{r}
+
+ autoplot(sale_tibble, Sales) + ylab('sales')+ facet_wrap(vars(Kind.of.Business))
+```
+```{r}
+ diff_sales = sale_tibble %>%
+  mutate(diff_value = difference(Sales,1)) 
+ 
+autoplot(diff_sales,diff_value) + ylab('sales') + facet_wrap(vars(Kind.of.Business))
+```
+## Analyzing ACF and PACF for each series separately
+
+```{r}
+## Analyzing ACF and PACF for each series separately
+sub_beer_wine = subset(sale_tibble, Kind.of.Business == 'Beer, wine and liquor stores')
+sub_electronic_shopping = subset(sale_tibble, Kind.of.Business == 'Electronic shopping and mail order houses')
+sub_building_material = subset(sale_tibble, Kind.of.Business == 'Building mat. and garden equip. and supplies dealers')
+sub_gasoline = subset(sale_tibble, Kind.of.Business == 'Gasoline stations')
+sub_grocery = subset(sale_tibble, Kind.of.Business == 'Grocery stores')
+sub_clothing = subset(sale_tibble, Kind.of.Business == 'Clothing and clothing access. stores')
+sub_pharmacy = subset(sale_tibble, Kind.of.Business == 'Pharmacies and drug stores')
+sub_automobile = subset(sale_tibble, Kind.of.Business == 'Automobile and other motor vehicle dealers')
+sub_motor_vehicle = subset(sale_tibble, Kind.of.Business == 'Motor vehicle and parts dealers')
+sub_electronic_appliance = subset(sale_tibble, Kind.of.Business == 'Electronics and appliance stores')
+sub_sporting_good = subset(sale_tibble, Kind.of.Business == 'Sporting goods, hobby, musical instrument, and book stores')
+```
+
+```{r}
+sub_electronic_appliance %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+sub_electronic_appliance %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+
+```
+
+
+```{r}
+
+sub_electronic_shopping %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_electronic_shopping %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+```
+
+```{r}
+sub_pharmacy %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+sub_pharmacy %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+```
+
+```{r}
+sub_sporting_good %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_sporting_good %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+```
+
+```{r}
+sub_clothing %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_clothing %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+```
+
+
+```{r}
+sub_gasoline %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_gasoline %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+```
+
+```{r}
+sub_motor_vehicle %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_motor_vehicle %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+```
+#Fitting ARIMA model
+```{r}
+library(fable)
+  # let ARIMA() choose the model
+
+
+caf_fit <- sale_tibble %>%
+  filter(Kind.of.Business == "Grocery stores") %>%
+  model(arima110 = ARIMA(Sales ~ pdq(1,1,0)+ PDQ(1,1,0)),
+        arima011 = ARIMA(Sales ~ pdq(0,1,1) + PDQ(1,1,0)),
+        stepwise = ARIMA(Sales),
+        search = ARIMA(Sales, stepwise=FALSE))
+
+
+
+
+```
+
+
+```{r}
+fit = sub_clothing %>% model(ar_011 = ARIMA(Sales ~ pdq(0,1,3)))
+
+gg_tsresiduals(fit)
+
+  # Check for autocorrelation: Ljung-Box Test  
+augment(fit) %>%
+  features(.resid, ljung_box, lag = 10, dof = 3)
+
+  # Generate forecast
+
+```
+
+```{r}
+
+caf_fit %>% pivot_longer( !Kind.of.Business , names_to = "Model name",
+                         values_to = "Orders")
+glance(caf_fit) %>% arrange(AICc) %>% select(.model:BIC)
+```
+
+```{r}
+caf_fit %>%
+  select(arima011) %>%
+  gg_tsresiduals()
+```
+
+```{r}
+augment(caf_fit) %>%
+  filter(.model=='arima011') %>%
+  features(.innov, ljung_box, lag = 10, dof = 3)
+```
+```{r}
+  sub_beer_wine %>% 
+  model(
+    ets = ETS(box_cox(Sales, 0.3)),
+    arima = ARIMA(Sales~ pdq(0,1,1)),
+    snaive = SNAIVE(Sales)
+  ) %>%
+  forecast(h = 12) %>% 
+  autoplot( level = NULL)
+```
+
+```{r}
+fit <- sub_beer_wine %>% 
+  model(auto_ets = ETS(Sales))
+fit
+```
+```{r}
+report(fit)
+```
+
+```{r}
+sub_clothing %>% 
+  # Withhold the last 3 years before fitting the model
+  filter(year(Date)<=2018) %>% 
+  # Estimate the models on the training data (1998-2014)
+  model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()
+              ),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid (2015-2017)
+  forecast(h = "2 years") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  accuracy(sub_clothing)
+```
+
+```{r}
+sub_clothing %>% 
+  # Withhold the last 3 years before fitting the model
+  filter(year(Date)<=2018) %>% 
+  # Estimate the models on the training data (1998-2014)
+  model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid (2015-2017)
+  forecast(h = "2 years") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_clothing, year(Date)>=2015), level = NULL)
+```
+
+```{r}
+sub_beer_wine %>% 
+  # Withhold the last 3 years before fitting the model
+  filter(year(Date)<=2018) %>% 
+  # Estimate the models on the training data (1998-2014)
+  model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid (2015-2017)
+  forecast(h = "2 years") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+ accuracy(sub_beer_wine)
+```
+```{r}
+
+```
+
+```{r}
+sub_automobile %>% 
+  # Withhold the last 3 years before fitting the model
+  filter(year(Date)<=2018) %>% 
+  # Estimate the models on the training data (1998-2014)
+  model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid (2015-2017)
+  forecast(h = "2 years") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_automobile, year(Date)>=2015), level = NULL)
+```
+
+
+```{r}
+retail_sales_tb %>%
+  gg_season(Sales, labels = "both") +
+  labs(y = "$ (millions)",
+       title = "Seasonal plot: Retail sales") 
+```
+
+```{r}
+
+```
+
