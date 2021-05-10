@@ -1,0 +1,1237 @@
+---
+title: "BUAN 6357 Project Report- US Retail Sales Forecast and Impact of COVID-19 on Consumer Behavior"
+author: "Tamanna_Kawatra TXK190011"
+date: "3/16/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r pressure, echo=FALSE}
+pacman::p_load(dplyr,fpp3, GGally, gridExtra, lubridate, patchwork, purrr, ggplot2, tibble, reportr , plyr, fable, TSstudio, mice, lattice, VIM, tidyverse,  keras, tensorflow, forecast, MLmetrics, Metrics)
+search()
+theme_set(theme_classic())
+options(digits = 3)
+```
+# Executive Summary
+
+## The coronavirus outbreak is a global humanitarian crisis that has affected millions of people. The economic impact of the pandemic can be seen across sectors, but it may be most widely visible in the consumer goods sector.
+## All US consumer goods manufacturers are urgently trying to determine the extent to which these changes in consumer behavior will affect their categories, channels, and brands during and beyond this crisis—and what actions they can take now.
+## According to estimates, Expect retail sales to continue growing strongly in April and May, after a 9.8% rise in March. March showed that consumers are ready and willing to spend when restrictions such as restaurant capacity limits are relaxed. 
+## All sales categories are benefiting from the surge, and have surpassed prepandemic spending levels, with the exception of restaurants and department stores. The strongest-growing sectors over the past 1.5 years have been sporting goods stores, e-commerce and motor vehicles.
+## Prospective Clients/ Departments to benefit:
+### 1.	Marketing Department: As the shopping- channels have changed so better online promotions can help in increasing sales and getting more customers.
+### 2.	Sourcing Department: As consumers are buying more necessary goods and so it can help to forecast demand. 
+### 3.	Expansion in E-commerce
+
+# Introduction
+## Covid 19 there is a major shift in consumer behavior and demand I tried to analyze which industries are adversely affected which industries got revived.
+## Consumer behavior has changed across several dimensions: category consumptions, channel selection, shopper trip frequency, brand preference, and media consumption. These shifts, combined with forecasts for virus containment and economic recovery, are critical for commercial strategies.
+## COVID-19 continues to shift the business and commerce landscapes in the U.S. and around the world, some companies have been fortunate to see enormous jumps in demand. Many of these businesses, which mostly center around technology and recreation, will not simply be a flash in the pan and will continue to attract many customers after the pandemic in part to changing consumer behavior.
+## Due to Covid 19, there has been a 3% dip in the overall sales from March 2019 sales. 
+
+\newpage
+
+# Data Description
+
+## I have gathered data for the retails sales from The US census bureau for the past 20 years. I used data till May 2020 for training and tried to predict demand for last 7 months of 2020 demand.
+## The preliminary hypothesis is that there is no change in demand. But after comparing results it shows that for few industries the demand grew due to pandemic and for few industries, the demand fell drastically.
+## The data for external regressors is taken from US labour statistics for unemployment rate and gasoline price data from US. Energy information administration 
+## The data consists of 38 different industries which are namely:
+### All other gen. merchandise stores ,Automobile and other motor vehicle dealers,Automotive parts, acc., and tire stores,Beer, wine and liquor stores, Building mat. and garden equip. and supplies dealers, Building mat. and supplies dealers, Clothing and clothing access. stores, Clothing stores,Department stores, Electronic shopping and mail order houses, Electronics and appliance stores, Food and beverage stores, Food services and drinking places, Fuel dealers, Furniture and home furnishings stores, Furniture, home furn, electronics, and appliance stores, GAFO(1), Gasoline stations, General merchandise stores, Grocery stores,Health and personal care stores,Jewelry stores, Men's clothing stores, Miscellaneous stores retailers, Motor vehicle and parts dealers, Nonstore retailers,Other general merchandise stores, Pharmacies and drug stores, Retail and food services sales, total,Retail sales and food services excl gasoline stations, Retail sales and food services excl motor vehicle and parts, Retail sales and food services excl motor vehicle and parts and gasoline stations,Retail sales, total, Retail sales, total (excl. motor vehicle and parts dealers),Shoe stores, Sporting goods, hobby, musical instrument, and book stores,Warehouse clubs and superstores, Women's clothing stores
+
+### For the purpose of this I have broken my analysis into parts:
+### 1. Predicting Overall Sales of Retail and Food Services industry. I have taken "Retail and Food services, Total" and forecasted sales using different methods like ARIMA, ETS and LSTM
+### 2. I have filtered 11 industries and applied forecasting methods like ARIMA, ETS to predict demand. The following 11 industriesare:
+### •	Motor vehicle and parts dealers,  
+### •	Automobile and other motor vehicle dealers,  
+### •	Building mat. and garden equip. and supplies dealers,  
+### •	Beer, wine and liquor stores,  
+### •	Pharmacies and drug stores,  
+### •	Gasoline stations,  
+### •	Clothing and clothing access. stores,  
+### •	Sporting goods, hobby, musical instrument, and book stores,  
+### •	Electronic shopping and mail order houses,  
+### •	Electronics and appliance stores
+
+## Reading the Data
+
+```{r, echo=FALSE}
+
+df <- data.frame(read.csv("Project_dataset.csv"))
+colnames(df)
+names(df)[names(df) == "Kind.of.business."] <- "Kind_of_Business"
+colnames(df)
+df$Date = as.Date(df$Year_month)
+#df$Sales = as.numeric(df$Sales)
+#df = filter(df, Date <'2021-01-01')
+summary(df$Sales)
+```
+
+# Preprocessing Data - Treating the Missing Values
+
+## The retail dataset downloaded from www.census.gov had 14 missing values in the sales amount of the year 2020.
+## For treating missing values, I have imputed missing values with the mean values of the categories.
+
+```{r, echo=FALSE}
+summary(df)
+##There are 14 missing values in Sales fields
+## Treating the missing values with average value of that year
+md.pattern(df)
+md.pairs(df)
+```
+```{r, echo=FALSE}
+##Which industry  has missing
+ missing_data =  df[!complete.cases(df),]
+print("Missing Industries")
+unique(missing_data$Kind_of_Business)
+length(unique(missing_data$Kind_of_Business))
+
+```
+
+```{r, echo=FALSE}
+# Which year has missing
+print("The value in which we have missing Sales")
+unique(year(missing_data$Date))
+# Only 2020 has missing values due to less points 
+#recorded so imputing it with that year average value
+
+```
+
+## Mean Imputation
+## The industries for Jewelry, Men's clothing were imputed with median imputation
+```{r, echo=FALSE}
+imp_Jewerlry = df %>% filter(year(Date)== 2020, Kind_of_Business =="Jewelry stores") 
+imp_men_clothing =  df %>% filter(year(Date)== 2020, Kind_of_Business =="Men's clothing stores") 
+imp_Jewerlry_mean = mean(imp_Jewerlry$Sales, na.rm= TRUE)
+imp_mens_clothing_mean = mean(imp_men_clothing$Sales, na.rm= TRUE)
+df$Sales[with(df, Kind_of_Business =="Jewelry stores"  & is.na(Sales))] <- imp_Jewerlry_mean
+df$Sales[with(df, Kind_of_Business ==
+                "Men's clothing stores"  & is.na(Sales))] <- imp_mens_clothing_mean
+summary(df)
+
+
+```
+
+# Exploratory Data Analysis
+
+## In this section, I have tried to analyze how the sales of various industries changes over the Year.
+## The year 2020 has changed users buying patterns and people have started spending more on necessary items rather than a luxury. 
+## Few industries have seen an upward trend. There are few industries which has seen increasing trend even during Covid -19, because people started stocking up the products. Following industries has seen and upward trend in Sales
+## 1.	Grocery stores
+## 2.	Pharmacy and drug store
+## 3.	Beer, wine and Liquor store
+## 4.	Electronic shopping and mail order houses,  
+## The industies that have seen positive yoy growth in 2020 are termed as most profitable industries.
+## The industries that have seen negative yoy growth in 2020 are termed as least profitable industries
+
+# Analyzing Overall and Retails and Food services-Total Industry 
+
+```{r echo=FALSE}
+## Taking Total retails sales and Food services timeseries data 
+
+retail_sales_tb = df %>% subset(Kind_of_Business == 
+                   "Retail and food services sales, total") %>% 
+  mutate(Year_Month = yearmonth(Date)) %>%
+  as_tsibble(index =Year_Month , key = 'Kind_of_Business') 
+
+
+autoplot(retail_sales_tb, Sales)
+
+retail_sales_tb %>%
+  gg_season(Sales, labels = "both") +
+  labs(y = "$ (millions)",
+       title = "Seasonal plot: Retail sales") 
+
+```
+## As overall we can see a downward trend in the months of March 2020 and April 2020,But gradually the sales picked up momentum
+
+# Most and Least Profitable Industries of 2020
+
+## As people stocked up grocery, liqour, and medicines, these industries have been most profitable. Online Shopping gained momentum.
+
+## Clothing, shoes, dine out places have been hit the hardest
+```{r, echo=FALSE, warning=FALSE}
+df_total_sales = df %>% group_by(Kind_of_Business, year = year(Date)) %>% 
+dplyr :: summarise(Sum_sales_per_year = sum(Sales)) %>% 
+  arrange(Kind_of_Business , year) 
+
+df_yoy_yearly = ddply(df_total_sales, .(Kind_of_Business),
+          mutate ,yoy_growth_pct = (Sum_sales_per_year - lag(Sum_sales_per_year,1))/lag(Sum_sales_per_year,1)) %>%  filter (year == 2020)
+
+top_five_profitable_industries = head(df_yoy_yearly[order(-df_yoy_yearly$yoy_growth_pct),],5)
+
+least_five_profitable_industries = tail(df_yoy_yearly[order(-df_yoy_yearly$yoy_growth_pct),])
+
+ggplot(top_five_profitable_industries, 
+aes(x=Kind_of_Business, y=yoy_growth_pct)) + 
+ggtitle("Most Profitable Industries in 2020")+
+theme(axis.text.x = element_text(angle = 90))+ 
+geom_bar(stat="identity", fill="steelblue") +  scale_y_continuous()
+
+ggplot(least_five_profitable_industries, 
+aes(x=Kind_of_Business, y=yoy_growth_pct)) + 
+ggtitle("Least Profitable Industries in 2020")+
+theme(axis.text.x = element_text(angle = 90)) + 
+geom_bar(stat="identity", fill="red") +
+scale_y_continuous()
+
+```
+
+# Filtering Individual Industries
+
+```{r, echo=FALSE}
+industry_filter = c('Motor vehicle and parts dealers' ,  
+'Automobile and other motor vehicle dealers' ,  
+'Building mat. and garden equip. and supplies dealers' ,  
+'Beer, wine and liquor stores' ,  
+'Pharmacies and drug stores' ,  
+'Gasoline stations' ,  
+'Clothing and clothing access. stores' ,  
+'Sporting goods, hobby, musical instrument, and book stores' ,  
+'Electronic shopping and mail order houses' ,  
+'Electronics and appliance stores', 
+'Grocery stores')
+df = df %>% dplyr:: arrange(Kind_of_Business ,Date)
+df5 = df  %>% group_by(Kind_of_Business , month = month(Date))%>% 
+  dplyr:: arrange(Kind_of_Business ,month) 
+
+df_retail = subset(df, Kind_of_Business %in% industry_filter)
+sale_tibble = df_retail %>%
+  mutate(Year_Month = yearmonth(Date)) %>%
+  as_tsibble(index =Year_Month , key = Kind_of_Business) 
+ sale_tibble %>% ggplot(aes(x = Date, y = Sales )) +
+      geom_line() +facet_wrap(vars(Kind_of_Business) , nrow = 4 , ncol = 3 , scales = "free")
+
+```
+```{r, echo=FALSE}
+df6 = ddply(df5, .(Kind_of_Business, month), mutate ,
+      yoy_growth_pct = (c(NA, diff(Sales)))/lag(Sales,1))
+```
+
+# Month over Month Growth Trend
+
+## The month over month trend has been very random due to a number of economic factors like recession, price change etc.
+
+```{r, echo=FALSE}
+ df6 = ddply(df5, .(Kind_of_Business, month), mutate ,
+      yoy_growth_pct = (c(NA, diff(Sales)))/lag(Sales,1))
+
+
+ YOY_pct  = df6 %>% 
+  select(c(Date, Kind_of_Business , yoy_growth_pct)) %>% 
+  pivot_wider(names_from = Kind_of_Business , values_from = yoy_growth_pct)
+
+
+ df_yoy = subset(df6, year(Date) == 2020 & Kind_of_Business %in% industry_filter)
+ 
+  df6 %>% filter(Kind_of_Business %in% industry_filter)%>%
+  ggplot(aes(x = Date, y = yoy_growth_pct*100 )) +
+  geom_line() +facet_wrap(vars(Kind_of_Business) , nrow = 4 , ncol = 3 , scales = "free")
+ 
+ df6 %>% filter(Kind_of_Business %in% industry_filter) %>% 
+  ggplot(aes(x = month, y = yoy_growth_pct*100 )) +scale_x_binned( ) +
+  scale_y_continuous() +
+  geom_line() +facet_wrap(vars(Kind_of_Business) , nrow = 4 , ncol = 3 )
+```
+
+## Few Industries that saw negative growth in starting month of 2020 as compared to 2019 gained momentum in th later half of year 2020, when the economy started reviving
+
+```{r, echo=FALSE}
+## add facet grid and reduce retails
+ggplot(df_yoy, aes(x=month, y=yoy_growth_pct)) + 
+  geom_col(position="dodge") + scale_x_binned( ) +
+  scale_y_continuous()+ facet_wrap(vars(Kind_of_Business ) , nrow = 4 , ncol = 3)
+
+```
+
+# Checking the Stationarity
+
+## As p-value of all the industries is less that 0.05 we reject the null Hypothesis and conclude that the series is not stationary
+
+```{r, echo=FALSE}
+# Checking the retail sales stationarity
+retail_sales_tb %>%
+  features(Sales, unitroot_kpss)
+## number of difference required
+retail_sales_tb %>% features(Sales, unitroot_ndiffs)
+
+## Checking stationarity of 11 industries
+
+sale_tibble %>%
+  features(Sales, unitroot_kpss)
+## number of difference required
+sale_tibble %>% features(Sales, unitroot_ndiffs)
+```
+
+## Analyzing ACF and PACF for each series separately
+
+```{r, echo=FALSE}
+# creating dataframes of individual time series
+sub_beer_wine = subset(sale_tibble, 
+                       Kind_of_Business == 'Beer, wine and liquor stores')
+sub_electronic_shopping = subset(sale_tibble, 
+                                 Kind_of_Business ==
+                          'Electronic shopping and mail order houses')
+sub_building_material = subset(sale_tibble, 
+                               Kind_of_Business == 
+                      'Building mat. and garden equip. and supplies dealers')
+sub_gasoline = subset(sale_tibble, Kind_of_Business == 'Gasoline stations')
+sub_grocery = subset(sale_tibble, Kind_of_Business == 'Grocery stores')
+sub_clothing = subset(sale_tibble, Kind_of_Business == 'Clothing and clothing access. stores')
+sub_pharmacy = subset(sale_tibble, Kind_of_Business == 'Pharmacies and drug stores')
+sub_automobile = subset(sale_tibble, Kind_of_Business == 'Automobile and other motor vehicle dealers')
+sub_motor_vehicle = subset(sale_tibble, 
+                           Kind_of_Business == 'Motor vehicle and parts dealers')
+sub_electronic_appliance = subset(sale_tibble, Kind_of_Business == 'Electronics and appliance stores')
+sub_sporting_good = subset(sale_tibble,Kind_of_Business == 
+                'Sporting goods, hobby, musical instrument, and book stores')
+```
+
+```{r, echo=FALSE}
+## Retail and Food Service, Total
+retail_sales_tb  %>%  gg_tsdisplay(Sales, plot_type = 'partial')
+retail_sales_tb %>%
+  mutate(diff_value = difference(Sales, lag = 1)) %>%  
+gg_tsdisplay(diff_value, plot_type = 'partial')
+
+```
+
+## Higher Values of lag 1 of non-diffenced series indicate high degree of auto-correlation at lag 1
+## Higher value of lag 2 of differenced series indicate that a moving average model can stabalize the series
+
+```{r, echo=FALSE}
+# Beer and Wine Industry
+sub_beer_wine %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+sub_beer_wine %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_beer_wine %>%
+  mutate(diff_value = difference(Sales, lag = 1))%>% 
+  gg_tsdisplay(diff_value, plot_type = 'partial') 
+
+
+```
+## Higher Value of lag at 1st and 3rd in PACF plot for Beer and Wine industry shows some seasonality in the data
+
+```{r, echo=FALSE}
+sub_electronic_appliance %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+sub_electronic_appliance %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_electronic_appliance %>%
+  mutate(diff_value = difference(Sales, lag = 1))%>% 
+  gg_tsdisplay(diff_value, plot_type = 'partial') 
+
+```
+
+## For the electronic_appliance industry, as in PACF plot 2 lags are outside the 95% confidence we will add 2 lags in the arima forecast
+
+```{r, echo=FALSE}
+
+sub_electronic_shopping %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_electronic_shopping %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_electronic_shopping %>% 
+mutate(diff_value = difference(Sales, lag = 1, difference= 2)) %>% 
+gg_tsdisplay(diff_value, plot_type = 'partial') 
+```
+
+## For the electronic_shopping industry, as in PACF plot 2 lags are outside the 95% confidence we will add 2 moving  in the arima forecast
+
+```{r, echo=FALSE}
+sub_building_material %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+sub_building_material %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_building_material %>% 
+mutate(diff_value = difference(Sales, lag = 1, difference= 1)) %>% 
+gg_tsdisplay(diff_value, plot_type = 'partial') 
+
+```
+
+## Higher Value of Lag 1 in PACF with negative sign indicates one moving average term can be added for Building Material industry
+
+```{r, echo=FALSE}
+sub_automobile %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+sub_automobile %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_automobile %>% 
+mutate(diff_value = difference(Sales, lag = 1, difference= 1)) %>% 
+gg_tsdisplay(diff_value, plot_type = 'partial') 
+
+```
+## Higher Value of Lag 1 in PACF with negative sign indicates one moving average term can be added for Automobile industry
+
+```{r, echo=FALSE}
+sub_pharmacy %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+sub_pharmacy %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_pharmacy %>% 
+mutate(diff_value = difference(Sales, lag = 1, difference= 1)) %>% 
+gg_tsdisplay(diff_value, plot_type = 'partial') 
+
+
+```
+
+## For the Pharmacy industry, as in PACF plot 2 lags are outside the 95% confidence we will add 2 moving  in the arima forecast
+
+```{r, echo=FALSE}
+sub_sporting_good %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_sporting_good %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_sporting_good %>% 
+mutate(diff_value = difference(Sales, lag = 1, difference= 1)) %>% 
+gg_tsdisplay(diff_value, plot_type = 'partial') 
+```
+
+## For the sporting_good industry, as in PACF plot 2nd lags are outside the 95% confidence we will 2 moving average term in the arima forecast
+
+```{r, echo=FALSE}
+sub_clothing %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_clothing %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+
+sub_clothing %>% 
+mutate(diff_value = difference(Sales, lag = 1, difference= 1))%>% 
+gg_tsdisplay(diff_value, plot_type = 'partial') 
+```
+
+## For the clothing industry, as in PACF plot 2 lags are outside the 95% confidence and first la is positive we will 2 lags in the arima forecast
+
+```{r, echo=FALSE}
+sub_gasoline %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_gasoline %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_gasoline %>% mutate(diff_value = difference(Sales, lag = 1, difference= 1)) %>% gg_tsdisplay(diff_value, plot_type = 'partial') 
+```
+
+## For the gasoline_industry, as in PACF plot 2nd lags are outside the 95% confidence we will 2 moving average term in the arima forecast
+
+```{r, echo=FALSE}
+sub_motor_vehicle %>% gg_tsdisplay(Sales, plot_type = 'partial') 
+
+sub_motor_vehicle %>%
+  gg_subseries(Sales) +
+  labs(
+    y = "$ (millions)",
+    title = "Sales")
+sub_motor_vehicle %>% 
+mutate(diff_value = difference(Sales, lag = 1, difference= 1)) %>% 
+gg_tsdisplay(diff_value, plot_type = 'partial') 
+```
+
+## For the Motor_vehicle industry, as in PACF plot 2nd lags are outside the 95% confidence we will 2 moving average term in the arima forecast
+
+# Fitting ARIMA model
+
+```{r, echo=FALSE}
+col_order = c("Kind_of_Business", "Year_Month", "Date", "Sales")
+retail_sales_tb = retail_sales_tb[,col_order]
+
+```
+
+```{r, echo=FALSE}
+## Finding the Best model  for Retail and Food Service industry with AICC among different ARIMA models
+ca_fit <- retail_sales_tb %>% filter(Date <= '2020-05-01') %>%
+  fabletools::model(arima110 = ARIMA(Sales ~ pdq(1,1,0)),
+        arima011 = ARIMA(Sales ~ pdq(0,1,1)),
+        stepwise = ARIMA(Sales),
+        search = ARIMA(Sales, stepwise=FALSE))
+glance(ca_fit) %>% arrange(AICc) %>% select(.model:BIC)
+
+ca_fit %>%
+  select(search) %>%
+  gg_tsresiduals()
+
+augment(ca_fit) %>%
+  filter(.model=='search') %>%
+  features(.innov, ljung_box, lag = 10, dof = 3)
+
+
+predictions = ca_fit %>%
+ fabletools:: forecast(h=7) %>%
+  filter(.model=='search')
+test_data = filter(retail_sales_tb, Date > '2020-05-01')
+test_data = cbind(test_data, predictions$.mean)
+names(test_data)[names(test_data) == "predictions$.mean"] <- "predicted_sales_arima"
+
+RMSE(test_data$Sales, test_data$predicted_sales_arima)
+
+ca_fit %>%
+fabletools::  forecast(h=7) %>%
+  filter(.model=='search') %>%
+  autoplot(retail_sales_tb)
+
+
+
+```
+## The model with the lowest AICC value is ARIMA with Search which is ARIMA(2,1,0)
+
+# Training with ETS, Naive and Trend and Seasonality model
+## Best Model = SNaive RMSE = 20986
+
+```{r, echo=FALSE}
+set.seed(123)
+scores_retail_sales = retail_sales_tb %>% 
+  # Withhold the last 3 years before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data (1998-2020)
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(2,1,0)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid (2019-2020)
+ fabletools:: forecast(h = "7 months") %>% fabletools::accuracy(retail_sales_tb)
+col_order = c("Kind_of_Business", ".model", "RMSE")
+scores_retail_sales = scores_retail_sales[,col_order]
+ sc_classical = scores_retail_sales %>% 
+group_by(Kind_of_Business) %>% 
+dplyr::arrange(RMSE) %>% slice(1) 
+ names(sc_classical)[names(sc_classical) == ".model"] <- "model_name"
+ names(sc_classical)[names(sc_classical) == "Kind_of_Business"] <- "key"
+ names(sc_classical)[names(sc_classical) == "RMSE"] <- "RMSE_model"
+ sc_classical = data.frame(sc_classical)
+
+retail_sales_tb %>% 
+  # Withhold the last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(2,1,0)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time period
+  fabletools:: forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(retail_sales_tb, year(Date)>=2015), level = NULL)
+```
+
+## Best Model for Clothing Industry stepwise ARIMA RMSE = 3456
+
+```{r, echo=FALSE}
+scores_clothing = sub_clothing %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data  
+ fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+ fabletools:: forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+ fabletools:: accuracy(sub_clothing)
+
+sub_clothing %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data (1998-2020)
+ fabletools:: model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time period
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_clothing, year(Date)>=2015), level = NULL)
+scores_clothing
+```
+
+## Best Modelfor Beer Industry ARIMA(0,1,1) RMSE = 119
+
+```{r, echo=FALSE}
+scores_beer = sub_beer_wine %>% 
+  # Withhold the last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data 
+  fabletools:: model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+ fabletools:: forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+fabletools::accuracy(sub_beer_wine)
+
+sub_beer_wine %>% 
+  # Withhold the last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+ autoplot(filter(sub_beer_wine, year(Date)>=2015), level = NULL)
+scores_beer
+```
+
+
+## Best Model for Gasoline_Industry = Arima(0,1,1) RMSE 3503
+
+```{r, echo=FALSE}
+scores_gasoline = sub_gasoline %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()
+              ),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  fabletools::accuracy(sub_gasoline)
+
+sub_gasoline %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()
+              ),
+    snaive = SNAIVE(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+ fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+ autoplot(filter(sub_gasoline, year(Date)>=2015), level = NULL)
+scores_gasoline
+```
+
+## Best Modelfor Automobile Industry is Snaive RMSE = 8329
+
+```{r, echo=FALSE}
+sub_automobile %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools:: model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+ fabletools:: forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_automobile, year(Date)>=2015), level = NULL)
+
+
+scores_automobile = sub_automobile %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools:: model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  fabletools::accuracy(sub_automobile)
+scores_automobile
+```
+## Best Model for Electronic Shopping is ARIMA(0,1,1) RMSE = 4843
+
+```{r, echo=FALSE}
+set.seed(123)
+sub_electronic_shopping %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+ fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_electronic_shopping, year(Date)>=2015), level = NULL)
+
+
+scores_electronic_shopping = sub_electronic_shopping %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  fabletools::accuracy(sub_electronic_shopping)
+scores_electronic_shopping
+
+```
+
+## Best Model for Electronic Appliance Industry is the SNaive 889
+
+```{r, echo=FALSE}
+sub_electronic_appliance %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+      search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_electronic_appliance, year(Date)>=2015), level = NULL)
+
+
+scores_electronic_appliance = sub_electronic_appliance %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+ fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+      search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+fabletools::accuracy(sub_electronic_appliance)
+scores_electronic_appliance
+```
+
+## Best Model for Building Material Industry is ARIMA(0,1,1) with RMSE 1403
+
+```{r, echo=FALSE}
+sub_building_material %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+      search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_building_material, year(Date)>=2015), level = NULL)
+
+
+scores_building_material = sub_building_material %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+ fabletools:: forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+ fabletools:: accuracy(sub_building_material)
+scores_building_material
+```
+
+## Best Modelfor Grocery Industry with ARIMA(0,1,1) with RMSE 2404
+
+```{r, echo=FALSE}
+sub_grocery %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data  
+ fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_grocery, year(Date)>=2015), level = NULL)
+
+
+scores_grocery = sub_grocery %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  fabletools::accuracy(sub_grocery)
+scores_grocery
+```
+
+## Best Model for Motor vehicle industry SNaive RMSE 8509
+
+```{r, echo=FALSE}
+sub_motor_vehicle %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_motor_vehicle, year(Date)>=2015), level = NULL)
+
+
+scores_motor_vehicle = sub_motor_vehicle %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date<='2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),  
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+    
+  ) %>% 
+  # Forecast the witheld time peroid 
+ fabletools:: forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  fabletools::accuracy(sub_motor_vehicle)
+scores_motor_vehicle
+```
+
+## Best Model for Pharmacy Industry with ARIMA(0,1,1) RMSE = 1061
+
+```{r, echo=FALSE}
+sub_pharmacy %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_pharmacy, year(Date)>=2015), level = NULL)
+
+
+scores_pharmacy = sub_pharmacy %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+ fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+ fabletools:: accuracy(sub_pharmacy)
+scores_pharmacy
+```
+
+## Best Model is Trend and Seasonality model RMSE = 664
+
+```{r, echo=FALSE}
+set.seed(123)
+sub_sporting_good %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+ fabletools:: model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  autoplot(filter(sub_sporting_good, year(Date)>=2015), level = NULL)
+
+
+scores_sporting_good = sub_sporting_good %>% 
+  # Withhold the  last 7 months before fitting the model
+  filter(Date <= '2020-05-01') %>% 
+  # Estimate the models on the training data  
+  fabletools::model(
+    ets = ETS(Sales),
+    arima = ARIMA(Sales~pdq(0,1,1)),
+    lm = TSLM(Sales ~ trend() + season()),
+    snaive = SNAIVE(Sales),
+    search = ARIMA(Sales, stepwise=FALSE),
+    stepwise = ARIMA(Sales)
+  ) %>% 
+  # Forecast the witheld time peroid 
+  fabletools::forecast(h = "7 months") %>% 
+  # Compute accuracy of the forecasts relative to the actual data 
+  fabletools::accuracy(sub_sporting_good)
+
+```
+
+# Applying LSTM neural networks
+
+## LSTM Network : LSTM is a class of recurrent neural network
+## It is special kind of recurrent neural network that is capable of learning long term dependencies in data. This is achieved because the recurring module of the model has a combination of four layers interacting with each other.
+## An LSTM module has a cell state and three gates which provides them with the power to selectively learn, unlearn or retain information from each of the units. The cell state in LSTM helps the information to flow through the units without being altered by allowing only a few linear interactions. Each unit has an input, output and a forget gate which can add or remove the information to the cell state. The forget gate decides which information from the previous cell state should be forgotten for which it uses a sigmoid function. The input gate controls the information flow to the current cell state using a point-wise multiplication operation of ‘sigmoid’ and ‘tanh’ respectively. Finally, the output gate decides which information should be passed on to the next hidden state
+
+```{r, echo=FALSE}
+  Series = retail_sales_tb$Sales  # your time series 
+  
+  # transform data to stationarity
+  diffed = diff(Series, differences = 1)
+  
+  
+lags <- function(x, k){
+    
+    lagged =  c(rep(NA, k), x[1:(length(x)-k)])
+    DF = as.data.frame(cbind(lagged, x))
+    colnames(DF) <- c( paste0('x-', k), 'x')
+    DF[is.na(DF)] <- 0
+    return(DF)
+  }
+  supervised = lags(diffed, 1)
+  
+  
+  ## split into train and test sets
+  
+  N = nrow(supervised)
+  n = round(N *0.972, digits = 0)
+  train = supervised[1:n, ]
+  test  = supervised[(n+1):N,  ]
+```
+
+
+```{r, echo=FALSE}
+ ## scale data
+  normalize <- function(train, test, feature_range = c(0, 1)) {
+    x = train
+    fr_min = feature_range[1]
+    fr_max = feature_range[2]
+    std_train = ((x - min(x) ) / (max(x) - min(x)  ))
+    std_test  = ((test - min(x) ) / (max(x) - min(x)  ))
+    
+    scaled_train = std_train *(fr_max -fr_min) + fr_min
+    scaled_test = std_test *(fr_max -fr_min) + fr_min
+    return( list(scaled_train = as.vector(scaled_train), scaled_test = as.vector(scaled_test) ,scaler= c(min =min(x), max = max(x))) )
+    
+  }
+
+ ## inverse-transform
+  inverter = function(scaled, scaler, feature_range = c(0, 1)){
+    min = scaler[1]
+    max = scaler[2]
+    n = length(scaled)
+    mins = feature_range[1]
+    maxs = feature_range[2]
+    inverted_dfs = numeric(n)
+    
+    for( i in 1:n){
+      X = (scaled[i]- mins)/(maxs - mins)
+      rawValues = X *(max - min) + min
+      inverted_dfs[i] <- rawValues
+    }
+    return(inverted_dfs)
+  }
+Scaled = normalize(train, test, c(-1, 1))
+  
+  y_train = Scaled$scaled_train[, 2]
+  x_train = Scaled$scaled_train[, 1]
+  
+  y_test = Scaled$scaled_test[, 2]
+  x_test = Scaled$scaled_test[, 1]
+  
+dim(x_train) <- c(length(x_train), 1, 1)
+  dim(x_train)
+  X_shape2 = dim(x_train)[2]
+  X_shape3 = dim(x_train)[3]
+  batch_size = 1
+  units = 1
+```
+## Fitting and Compiling Deep learning Model
+
+```{r, echo=FALSE, warning=FALSE}
+model <- keras_model_sequential() 
+  model%>%
+    layer_lstm(units, batch_input_shape = c(batch_size, X_shape2, X_shape3), stateful= TRUE)%>%
+    layer_dense(units = 1)  
+
+  model %>% compile(
+    loss = 'mean_squared_error',
+    optimizer = optimizer_adam( lr= 0.02 , decay = 1e-6 ),  
+    metrics = c('accuracy')
+  )
+summary(model)
+  
+  nb_epoch = 50   
+  for(i in 1:nb_epoch ){
+    model %>% 
+    fit(x_train, y_train, epochs=1, batch_size=batch_size, verbose=1, shuffle=FALSE)
+    model %>% reset_states()
+  }
+
+  
+
+```
+# Forecasting the output
+```{r, echo=FALSE}
+L = length(x_test)
+dim(x_test) = c(length(x_test), 1, 1)
+  
+scaler = Scaled$scaler
+predictions = numeric(L)
+  for(i in 1:L){
+    X = x_test[i , , ]
+    dim(X) = c(1,1,1)
+    # forecast
+    yhat = model %>% predict(X, batch_size=batch_size)
+    
+    # invert scaling
+    yhat = inverter(yhat, scaler,  c(-1, 1))
+    
+    # invert differencing
+    yhat  = yhat + Series[(n+i)] 
+    
+    # save prediction
+    predictions[i] <- yhat
+  }
+```
+
+
+## Generating the time series
+
+```{r, echo=FALSE}
+predict_retail = data.frame(predictions)
+test_retail_sales =filter(retail_sales_tb, Date > '2020-05-01' & Date < '2021-01-01')
+test_retail_sales = cbind(test_retail_sales, predict_retail)
+test_retail_sales = as_tsibble(test_retail_sales, index =Year_Month) 
+```
+
+```{r, echo=FALSE}
+
+print('The RMSE of the ARIMA model with LSTM is:')
+RMSE_model = rmse(test_retail_sales$Sales, test_retail_sales$predictions)
+RMSE_model
+key ="Retail and food services sales, total"
+model_name= "LSTM_model"
+sc_lstm = cbind(key,model_name,RMSE_model)
+ggplot(test_retail_sales,aes(Date, Sales))+geom_line(color="blue")+geom_line(aes
+                                                                     (Date,predictions),color="green")
+```
+
+## The LSTM model is able to imitate the past trend thereby reducing the RMSE.
+## The green is the predicted time series and the blue is the actual timeseries
+
+# Adding External Regressors to ARIMA Model 
+
+## As we know that, sales of retail goods and services are dependent on other parameters like the unemployment rate, fuel price, is_holiday week, etc., I have added unemployment rate, gasoline price as features to predict with forecasted demand of Retail and Food Services- TotalIndustry
+
+
+```{r, echo=FALSE}
+df_external <- data.frame(read.csv("External_regressors_data.csv"))
+df_external = cbind(retail_sales_tb, df_external)
+col_order <- c("Year_Month", "Unemployment_rate",
+               "Gas_price", "Sales")
+my_data2 <- df_external[, col_order]
+```
+
+# Correlation Among External Regressors
+
+```{r,echo=FALSE}
+corr_plot <- ggcorr(my_data2, label = TRUE, label_size = 3, hjust = 1, layout.exp = 3, low = "#cc0099", high = "black")
+corr_plot
+```
+
+# Correlation Analysis with External regressors with Sales
+##  •Unemployment_rate is negatively correlated with Sales
+##  •Gas_price is positively correlated with Sales.
+
+```{r, echo=FALSE}
+my_data2 = as_tibble(my_data2, index = "Year_Month")
+multi <- msts(my_data2 %>% dplyr::select(Sales,Unemployment_rate,Gas_price),
+                    seasonal.periods = c(12))
+mstl(multi[,"Sales"]) %>% autoplot()
+
+```
+## The diagram above depicts the breakdown the time series component into Trend and monthly seasonality and random noise.
+
+# Splitting the Data in Train and Test 
+
+```{r, echo=FALSE}
+train_msts <- head(multi, n = length(multi) - 7)
+test_msts <- tail(multi, n = 7)
+```
+
+# Fitting the Data And Generating Predictions
+
+```{r, echo=FALSE ,warning=FALSE}
+
+model_arima <- stlm(train_msts[ , "Sales"], method = "arima",
+                    xreg = train_msts [ , c("Unemployment_rate", "Gas_price")])
+forecast_arima <- forecast(model_arima, 7,newxreg = test_msts[ , c("Unemployment_rate", "Gas_price")])
+key ="Retail and food services sales, total"
+RMSE_model = RMSE(forecast_arima$mean %>% as.numeric(), test_msts[ , "Sales"])
+model_name= "Arima_with_external_regressors"
+sc_external = cbind(key,model_name ,RMSE_model)
+print('The RMSE of the ARIMA model with external regressors is:') 
+RMSE_model
+autoplot(forecast_arima)
+
+```
+
+
+# Conclusion and Results
+
+## Analysis of RMSE results of 11 industries 
+
+### The following chart shows the best model for each of the industry based on smallest RMSE
+### For most of the models ARIMA(0,1,1) is the best model to fit and results in the lowest
+
+```{r, echo=FALSE}
+scores_combined = rbind(scores_beer,scores_gasoline, scores_automobile,scores_electronic_appliance,scores_building_material, scores_clothing, scores_electronic_shopping, scores_motor_vehicle, scores_grocery,scores_pharmacy, scores_sporting_good)
+col_order = c("Kind_of_Business" , ".model", "RMSE")
+scores_combined = scores_combined[,col_order]
+scores_combined %>% group_by(Kind_of_Business) %>% dplyr::arrange(RMSE) %>% slice(1)
+```
+
+## Overall Retail and Food services, Total sales 
+```{r, echo=FALSE}
+Sc_Retail_food_services_Total = rbind(sc_classical, sc_external, sc_lstm)
+Sc_Retail_food_services_Total
+```
+## The Best model for Retail and Food Services, industry is ARIMA with External Regressors with the RMSE of 15129.46
+## Forecasting sales with external variables highly correlated to our target data can help in improving model predictions. 
+## If a company has more valuable data to tag along the sales result, this Machine Learning model can be applied with extra variables as regressors. 
+## We can also add if a marketing campaign has significant impact to the forecasted sales, or if you would like to see if external factors such as competitors’ campaign can affect your product sales
+## Overall this project helped understand time series forecasting in detail and learn
+## about different methods of forecasting.
+
+# References
+
+### 1. "www.census.gov/retail/index.html"
+### 2. "https://data.bls.gov/timeseries/LNS14000000"
+### 3. "https://www.mckinsey.com/industries/
+### consumer-packaged-goods/our-insights/rapidly-forecasting-demand-and-adapting-commercial-plans-in-a-pandemic"
+### 4."https://www.uschamber.com/co/start/business-ideas/high-demand-businesses-post-pandemic"
+
+   
+
